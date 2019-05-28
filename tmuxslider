@@ -1,0 +1,223 @@
+#!/bin/bash
+
+# tmuxslider is run if the script is run with an argument, have a look at the end of the file
+
+tmuxslider-session-name() { echo "tmuxslider" ; }
+
+tmuxslider-tab-prompt() 
+{
+sliders=$(tmuxslider-number-of-sliders)
+echo "[$sliders] " ;
+}
+
+#set -euo pipefail
+
+warn() { echo "$*" >&2; }
+
+parse_it() 
+{
+parse_it_regex=$1
+parse_it_string=$2
+shift 2
+
+[[ $parse_it_string =~ $parse_it_regex ]] || return 
+
+i=1
+for parse_it_name; do
+	declare -g "$parse_it_name=${BASH_REMATCH[i++]}"
+done
+}
+
+tmuxslider-create-session()
+{
+mirror=$(tmuxslider-session-name)
+
+if ! tmux has-session -t "$mirror" 2> /dev/null ; then tmux new-session -s "$mirror" -n tmuxslider -d ; fi
+}
+
+tmuxslider-not-on-tmuxslider-session()
+{
+if [[ "$(tmux display-message -p "#S")" == "$(tmuxslider-session-name)" ]]  ; then
+	tmux display-message "You are on the 'tmuxslider' session, slide here."
+	exit 0
+fi
+}
+
+tmuxslider-create()
+{
+tmuxslider-not-on-tmuxslider-session
+tmuxslider-create-session
+ 
+cwd=$(tmux display-message -p '#{pane_current_path}')
+mirror=$(tmuxslider-session-name)
+
+pane_pid=$(tmux display-message -p '#{pane_pid}')
+
+tmux new-window -n "$pane_pid@$(date +%m-%d:%H:%M)" -t "$mirror"
+
+tmux refresh-client -S
+}
+
+tmuxslider-close-all()
+{
+sliders=$(tmuxslider-number-of-sliders)
+
+for i in {1..$sliders}
+do
+	tmuxslider-close
+done
+}
+
+tmuxslider-close()
+{
+tmuxslider-not-on-tmuxslider-session
+tmuxslider-create-session
+
+sliders=$(tmuxslider-number-of-sliders)
+
+if $sliders != 0 ; then
+	# swap with first from Q
+	# delete first in Q
+	tmux refresh-client -S
+fi
+}
+
+tmuxslider-number-of-sliders()
+{
+tmux list-windows -t $(tmuxslider-session-name) -F '#{window_name}' | wc -l
+}
+
+tmuxslider-next()
+{
+tmuxslider-not-on-tmuxslider-session
+tmuxslider-create-session
+
+sliders=$(tmuxslider-number-of-sliders)
+
+# next	
+pane_id=$(tmux display-message -p '#{pane_id}')
+
+tmux swap-pane -s .$pane_id -t "$mirror:0" -d
+tmux move-window -d -s "$mirror:0" -t "$mirror:$sliders"
+tmux move-window -r -t "$mirror"
+
+tmux refresh-client -S
+}
+
+tmuxslider-previous()
+{
+tmuxslider-not-on-tmuxslider-session
+tmuxslider-create-session
+
+sliders=$(tmuxslider-number-of-sliders)
+
+# previous	
+pane_id=$(tmux display-message -p '#{pane_id}')
+last_slider=$(( $sliders - 1 ))
+
+tmux swap-pane -s .$pane_id -t "$mirror:$last_slider" -d
+tmux move-window -da -s "$mirror:$last_slider" -t "$mirror:0"
+tmux move-window -r -t "$mirror"
+
+tmux refresh-client -S
+}
+
+tmuxslider-quick-start()
+{
+echo "Adding bindings for tmuxslider."
+
+tmux bind Tab run "$(pwd)/tmuxslider toggle"
+tmux bind BSpace run "$(pwd)/tmuxslider close" 
+
+echo "Creating 'tmuxslider_mini_prompt' file"
+
+printf "unset PROMPT_COMMAND\nexport PS1='> '\nclear\necho 'You are in a side-pane, a normal shell session' " > tmuxslider_mini_prompt
+
+echo "Setting TMUXAKE_SOURCE"
+
+tmux set-env TMUXAKE_SOURCE "$(pwd)/tmuxslider_mini_prompt"
+
+cat << 'EOQ'
+
+	type 'prefix + tab', you should have a side-pane with a mini prompt
+
+	type 'prefix + tab', as many times as you want to toggle the side-pane
+
+	type 'prefix + backspace', the side-pane is closed. Everything in it
+	                           is lost!            
+
+EOQ
+
+}
+
+tmuxslider-cleanup()
+{
+while read x; do unset -f  $x; done << EOF
+	$(declare -F | grep tmuxslider- | sed 's/declare -f//')
+EOF
+}
+
+tmuxslider-bash-completion()
+{
+cat << 'EOB'
+function _tmuxslider_completion
+{
+completion_list="next close kill status status2"
+
+cur prev
+COMPREPLY=()
+cur="${COMP_WORDS[COMP_CWORD]}"
+COMPREPLY=( $(compgen -W "${completion_list}" -- ${cur}) )
+
+return 0
+}
+
+complete -o nospace -F _tmuxslider_completion tmuxslider
+
+EOB
+}
+
+tmuxslider-help()
+{
+cat << 'EOH'
+NAME
+	tmuxslider - a slider manager for tmux
+
+SYNOPSIS
+	tmuake is used through tmux key bingins (See BINDINGS)
+
+	tmuxslider also accepts some command (See COMMANDS)
+
+	For the impatient, See QUICK-START, for a very temporary setup
+
+DESCRIPTION
+
+EOH
+
+}
+
+# run as command
+
+run_as_command()
+{
+[[ "create"  == "$1" ]] && tmuxslider-create
+[[ "next"  == "$1" ]] && tmuxslider-next
+[[ "previous"  == "$1" ]] && tmuxslider-previous
+
+[[ "close"  == "$1" ]] && tmuxslider-close
+[[ "close-all"  == "$1" ]] && tmuxslider-close-all
+
+#[[ "detach"  == "$1" ]] && tmuxslider-detach $2
+#[[ "attach"  == "$1" ]] && tmuxslider-attach $2
+#[[ "break"  == "$1" ]] && tmuxslider-break $2
+
+[[ "status"  == "$1" ]] && tmuxslider-status
+
+[[ 'quick-start' == $1 ]] && tmuxslider-quick-start
+[[ 'bash-completion' == $1 ]] && tmuxslider-bash-completion
+[[ '--help' == $1 ||  '-h' == $1 ]] && tmuxslider-help
+}
+
+if [[ ! -n $USE_TMUXAKE_LIB ]] ; then run_as_command $@ ; tmuxslider-cleanup ; fi
+
+

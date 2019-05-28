@@ -1,0 +1,54 @@
+a pane display one of multiple buffers
+	a shortkey brings the next/previous buffer
+		vim bindings?
+
+tab management
+	close
+	new
+	list
+	status
+
+tab titles
+
+
+any pane can be a slider
+	a pane that's not a slider can  forward command to a slider in the same window
+		this allows data to be displayed in a helper pane under the main pane
+		as multiple panes can be sliders we need to be able to chose which pane gets the command
+
+tmuxaxe pane can be sliders
+
+sliders can be shared between panes in different windows
+
+
+
+commands/bindings
+
+	next/previous slider
+		create if none found
+		ask if wants to share a slider session
+
+	jump to slider number x
+
+	name sliders session
+	
+	connect to sliders session
+
+	close current slider
+		bring previous slider forward
+
+	prompt reflects tab name
+		multi line prompt can display the other slider
+
+
+
+program flow
+	find pane with slider session (current pane or closest)
+		find pane slider session
+			run command
+
+
+
+
+
+
