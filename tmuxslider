@@ -2,43 +2,32 @@
 
 # tmuxslider is run if the script is run with an argument, have a look at the end of the file
 
-tmuxslider-session-name() { echo "tmuxslider" ; }
-
-tmuxslider-tab-prompt() 
+tmuxslider-session-name()
 {
-sliders=$(tmuxslider-number-of-sliders)
-echo "[$sliders] " ;
+window_id=$(tmux display-message -p '#I')
+echo "${window_id}_tmuxslider" ;
+}
+
+tmuxslider-status() 
+{
+sliders=$(tmux list-windows -t $(tmuxslider-session-name) 2> /dev/null | wc -l)
+echo "[$sliders]" ;
 }
 
 #set -euo pipefail
 
-warn() { echo "$*" >&2; }
-
-parse_it() 
-{
-parse_it_regex=$1
-parse_it_string=$2
-shift 2
-
-[[ $parse_it_string =~ $parse_it_regex ]] || return 
-
-i=1
-for parse_it_name; do
-	declare -g "$parse_it_name=${BASH_REMATCH[i++]}"
-done
-}
-
 tmuxslider-create-session()
 {
 mirror=$(tmuxslider-session-name)
+cwd=$(tmux display-message -p '#{pane_current_path}')
 
-if ! tmux has-session -t "$mirror" 2> /dev/null ; then tmux new-session -s "$mirror" -n tmuxslider -d ; fi
+if ! tmux has-session -t "$mirror" 2> /dev/null ; then tmux new-session -c $cwd -s "$mirror" -n tmuxslider -d ; fi
 }
 
 tmuxslider-not-on-tmuxslider-session()
 {
 if [[ "$(tmux display-message -p "#S")" == "$(tmuxslider-session-name)" ]]  ; then
-	tmux display-message "You are on the 'tmuxslider' session, slide here."
+	tmux display-message "You are on a 'tmuxslider' session, no sliding here."
 	exit 0
 fi
 }
@@ -46,45 +35,63 @@ fi
 tmuxslider-create()
 {
 tmuxslider-not-on-tmuxslider-session
-tmuxslider-create-session
- 
-cwd=$(tmux display-message -p '#{pane_current_path}')
-mirror=$(tmuxslider-session-name)
 
-pane_pid=$(tmux display-message -p '#{pane_pid}')
+sliders=$(tmuxslider-number-of-sliders)
+if (( $slider == 0 )) ; then 
+	tmuxslider-create-session
+	tmuxslider-next
+else
+	cwd=$(tmux display-message -p '#{pane_current_path}')
+	mirror=$(tmuxslider-session-name)
 
-tmux new-window -n "$pane_pid@$(date +%m-%d:%H:%M)" -t "$mirror"
+	pane_pid=$(tmux display-message -p '#{pane_pid}')
 
+	tmux select-window -t "$mirror:0"
+	tmux new-window -da -c $cwd -t "$mirror"
+	tmux swap-window -s "$mirror:0" -t "$mirror:1"
+fi
+
+tmuxslider-next
 tmux refresh-client -S
 }
 
 tmuxslider-close-all()
 {
-sliders=$(tmuxslider-number-of-sliders)
+tmuxslider-not-on-tmuxslider-session
+tmuxslider-create-session
 
-for i in {1..$sliders}
+sliders=$(tmuxslider-number-of-sliders)
+mirror=$(tmuxslider-session-name)
+
+for i in $( seq 1 $sliders)
 do
-	tmuxslider-close
+	tmux move-window -r -t "$mirror"
+	tmux kill-pane -t "$mirror:0"
 done
+
+tmux refresh-client -S
 }
 
 tmuxslider-close()
 {
 tmuxslider-not-on-tmuxslider-session
-tmuxslider-create-session
 
 sliders=$(tmuxslider-number-of-sliders)
 
-if $sliders != 0 ; then
-	# swap with first from Q
-	# delete first in Q
+if (($sliders != 0 )); then
+	mirror=$(tmuxslider-session-name)
+	pane_id=$(tmux display-message -p '#{pane_id}')
+
+	tmux swap-pane -s .$pane_id -t "$mirror:0" -d
+	tmux kill-window -t "$mirror:0"
+	
 	tmux refresh-client -S
 fi
 }
 
 tmuxslider-number-of-sliders()
 {
-tmux list-windows -t $(tmuxslider-session-name) -F '#{window_name}' | wc -l
+tmux list-windows -t $(tmuxslider-session-name) -F '#{window_name}' 2>/dev/null | wc -l
 }
 
 tmuxslider-next()
@@ -94,8 +101,8 @@ tmuxslider-create-session
 
 sliders=$(tmuxslider-number-of-sliders)
 
-# next	
 pane_id=$(tmux display-message -p '#{pane_id}')
+mirror=$(tmuxslider-session-name)
 
 tmux swap-pane -s .$pane_id -t "$mirror:0" -d
 tmux move-window -d -s "$mirror:0" -t "$mirror:$sliders"
@@ -111,13 +118,37 @@ tmuxslider-create-session
 
 sliders=$(tmuxslider-number-of-sliders)
 
-# previous	
+mirror=$(tmuxslider-session-name)
 pane_id=$(tmux display-message -p '#{pane_id}')
 last_slider=$(( $sliders - 1 ))
 
 tmux swap-pane -s .$pane_id -t "$mirror:$last_slider" -d
-tmux move-window -da -s "$mirror:$last_slider" -t "$mirror:0"
+
+tmux select-window -t "$mirror:0"
+tmux new-window -da -t "$mirror"
+tmux kill-window -t "$mirror:1"
+tmux move-window -s "$mirror:0" -t "$mirror:1"
+tmux move-window -s "$mirror:$sliders" -t "$mirror:0"
 tmux move-window -r -t "$mirror"
+
+tmux refresh-client -S
+}
+
+tmuxslider-break()
+{
+tmuxslider-not-on-tmuxslider-session
+
+mirror=$(tmuxslider-session-name)
+
+sliders=$(tmuxslider-number-of-sliders)
+last_slider=$(( $sliders - 1 ))
+
+if (($sliders != 0 )); then
+	tmuxslider-next
+	tmux move-window -s "$mirror:$last_slider"
+else
+	echo "You can only 'break' a slider. Check tmux break-pane (prefix + !)"
+fi
 
 tmux refresh-client -S
 }
@@ -126,26 +157,20 @@ tmuxslider-quick-start()
 {
 echo "Adding bindings for tmuxslider."
 
-tmux bind Tab run "$(pwd)/tmuxslider toggle"
-tmux bind BSpace run "$(pwd)/tmuxslider close" 
-
-echo "Creating 'tmuxslider_mini_prompt' file"
-
-printf "unset PROMPT_COMMAND\nexport PS1='> '\nclear\necho 'You are in a side-pane, a normal shell session' " > tmuxslider_mini_prompt
-
-echo "Setting TMUXAKE_SOURCE"
-
-tmux set-env TMUXAKE_SOURCE "$(pwd)/tmuxslider_mini_prompt"
+tmux bind C-T run "$(pwd)/tmuxslider create" 
+tmux bind -r C-Y run "$(pwd)/tmuxslider next"
+tmux bind -r C-R run "$(pwd)/tmuxslider previous"
+tmux bind -r C-C run "$(pwd)/tmuxslider close"
+tmux bind  C-V run "$(pwd)/tmuxslider close-all"
+tmux bind  C-E run "$(pwd)/tmuxslider break"
 
 cat << 'EOQ'
-
-	type 'prefix + tab', you should have a side-pane with a mini prompt
-
-	type 'prefix + tab', as many times as you want to toggle the side-pane
-
-	type 'prefix + backspace', the side-pane is closed. Everything in it
-	                           is lost!            
-
+	   C-T    create 
+	-r C-Y    next
+	-r C-R    previous
+	-r C-C    close
+	   C-V    close-all"
+	   C-E    break
 EOQ
 
 }
@@ -162,7 +187,7 @@ tmuxslider-bash-completion()
 cat << 'EOB'
 function _tmuxslider_completion
 {
-completion_list="next close kill status status2"
+completion_list="create previous next close close-all break status quick-start --help"
 
 cur prev
 COMPREPLY=()
@@ -181,22 +206,157 @@ tmuxslider-help()
 {
 cat << 'EOH'
 NAME
-	tmuxslider - a slider manager for tmux
+	tmuxslider - sliders for tmux
 
 SYNOPSIS
-	tmuake is used through tmux key bingins (See BINDINGS)
+	tmuxslider is used through tmux key bingins (See BINDINGS)
 
 	tmuxslider also accepts some command (See COMMANDS)
 
 	For the impatient, See QUICK-START, for a very temporary setup
 
 DESCRIPTION
+	tmuxslider is a plugin for tmux; it binds and manages "sliders".
+
+	Sliders are a bit like tabs, except that there are not fancy graphics.
+  
+	If you often need to change the content of a pane, tmuxslider can be
+	useful.
+
+	tmuxslider integrates in your environements by giving you a status you
+	can display in your bash prompt or your tmux status bar.
+
+	One slider session per window is managed.
+
+BINDINGS
+
+	tmux bind    C-T run "$(pwd)/tmuxslider create" 
+	tmux bind -r C-Y run "$(pwd)/tmuxslider next"
+	tmux bind -r C-R run "$(pwd)/tmuxslider previous"
+	tmux bind -r C-C run "$(pwd)/tmuxslider close"
+	tmux bind    C-V run "$(pwd)/tmuxslider close-all"
+	tmux bind    C-E run "$(pwd)/tmuxslider break"
+
+COMMANDS
+	
+	create      Creates a new slider, moves your pane to a slider session.
+
+	            This is binded by defaut to prefix + C-T
+
+	next        Moves your current pane to the end of the slider session
+		    and replaces it with the first slider. If no other slider
+		    exists one is created.
+
+	            This is binded by defaut to prefix + C-Y 
+
+	previous    Moves your current pane to the start of the slider session
+		    and replaces it with the last slider.
+
+	            This is binded by defaut to prefix + C-R
+
+	close       If sliders exist, close your current pane and replaces it
+		    with the first slider.
+
+	            This is binded by defaut to prefix + C-C 
+
+	close-all   Closes all the sliders
+
+	            This is binded by defaut to prefix + C-V 
+
+	break       Makes a window of your slider.
+
+	            This is binded by defaut to prefix + C-E 
+
+	status      returns a glyph that can be added to your bash prompt
+
+	quick-start setup a temporary environment to try tmuxslider.
+
+INTEGRATION
+	Bash prompt
+		Add the result of $(/path.../tmuxslider status) to your PS1.
+		
+		'[n]' where n is the number of sliders in the slider session.
+
+		Be aware that the bash prompt is displayed after a command is
+		run and that tmuxslider commands bound to keys will not update the
+		bash prompt. The tmux status bar is more up to date. 
+
+	tmux status bar
+		Add the following to your status bar definition in .tmux.conf: 
+
+		set -g status-left ... #[fg=cyan]#(/path.../tmuxslider status)
+
+		It will put the tmuxslider status in tmux status bar.  
+
+	Smaller prompt
+		I recommand that you create a small prompt for the side-panes
+		as long propmpts tend to clutter their display.
+
+		if the _tmux_ variable 'TMUXSLIDER_SOURCE' is set, tmuxslider will
+		source the file it points to. The file is sourced so you can
+		influence the slider environment.
+
+		set the tmux variable, in your .bashrc for example, like this:
+
+		tmux set-env TMUXSLIDER_SOURCE  '/path .../bash_script_to_source' 
+
+	Bash command completion
+		Run 'tmuxslider bash-completion', put the output in your .bashrc
+
+INSTALLATION
+	Copy 'tmuxslider' in a directory of your chosing
+
+	Edit your ~/.tmux.conf to add the bindings
+		See 'BINDINGS' above
+
+	Integrate tmuxslider in your environment
+		See 'INTEGRATION' above
+			
+ENVIRONMENT
+	tmuxslider creates a session, in tmux, named 'tmuxslider'
+
+	/.tmux.conf 
+		tmux configuration files where bindings are defined.
+
+BUGS
+	Report on github or via mail, patches are welcome.
+
+AUTHOR
+	Nadim Khemir <nadim dot khemir at gmail dot com>
+
+LICENSE
+	Artistic license 2.0
+
+GITHUB
+	https://github.com/nkh/tmuxslider
+
+SEE ALSO
+	tmux - terminal multiplexer
+		https://github.com/tmux/tmux
+
+	Yakuake
+		https://yakuake.kde.org/
+
+	tmuxake
+		https://github.com/nkh/tmuxake
+
+QUICK-START
+	
+	run "tmuxslider quick-start"
+
+	type 'prefix + C-T', you now are now in a new slider, your previous
+	pane was moved to the sliders circular buffer.
+
+	type 'prefix + C-Y', to get the next slider, it circles around after
+	the last slider.
+
+	type 'prefix + C-C', to close the current slider.            
+
+	Read the manual and proceed with the normal installation.
 
 EOH
 
 }
-
-# run as command
 
 run_as_command()
 {
@@ -207,9 +367,9 @@ run_as_command()
 [[ "close"  == "$1" ]] && tmuxslider-close
 [[ "close-all"  == "$1" ]] && tmuxslider-close-all
 
+[[ "break"  == "$1" ]] && tmuxslider-break $2
 #[[ "detach"  == "$1" ]] && tmuxslider-detach $2
 #[[ "attach"  == "$1" ]] && tmuxslider-attach $2
-#[[ "break"  == "$1" ]] && tmuxslider-break $2
 
 [[ "status"  == "$1" ]] && tmuxslider-status
 

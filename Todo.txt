@@ -1,0 +1,21 @@
+Make session and tabbing windows based
+	# all tabs "belong" to window_id_tmuxslider
+	detach/attach use tmuxslider session
+	
+#Implement break
+
+Install locally 
+
+#Add completion
+
+#Add documentation
+
+integrate with tnuxake
+	tmuxake tab has specific tab session
+
+	tmuxake parent can't be tabs (since it has side tabs)
+
+	preferably by disabling tab functionalite based on tmuxake name
+		so no changes are needed in tmuxake
+
+
