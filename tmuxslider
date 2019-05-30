@@ -30,6 +30,14 @@ if [[ "$(tmux display-message -p "#S")" == "$(tmuxslider-session-name)" ]]  ; th
 	tmux display-message "You are on a 'tmuxslider' session, no sliding here."
 	exit 0
 fi
+
+pane_pid=$(tmux display-message -p '#{pane_pid}')
+
+if pane_mirror_name=$(tmux list-windows -t tmuxake -F '#{window_name}' | grep "^${pane_pid}-") \
+	||  pane_mirror_name=$(tmux list-windows -t tmuxake -F '#{window_name}' | grep -- "-${pane_pid}") ; then
+	echo "Sliding not supported in 'tmuxake' windows."
+	exit 0
+fi
 }
 
 tmuxslider-create()
