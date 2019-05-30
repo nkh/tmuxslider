@@ -45,9 +45,8 @@ tmuxslider-create()
 tmuxslider-not-on-tmuxslider-session
 
 sliders=$(tmuxslider-number-of-sliders)
-if (( $slider == 0 )) ; then 
+if (( $sliders == 0 )) ; then 
 	tmuxslider-create-session
-	tmuxslider-next
 else
 	cwd=$(tmux display-message -p '#{pane_current_path}')
 	mirror=$(tmuxslider-session-name)
