@@ -33,8 +33,8 @@ fi
 
 pane_pid=$(tmux display-message -p '#{pane_pid}')
 
-if pane_mirror_name=$(tmux list-windows -t tmuxake -F '#{window_name}' | grep "^${pane_pid}-") \
-	||  pane_mirror_name=$(tmux list-windows -t tmuxake -F '#{window_name}' | grep -- "-${pane_pid}") ; then
+if pane_mirror_name=$(tmux list-windows -t tmuxake -F '#{window_name}' 2>/dev/null | grep "^${pane_pid}-") \
+	||  pane_mirror_name=$(tmux list-windows -t tmuxake -F '#{window_name}' 2>/dev/null | grep -- "-${pane_pid}") ; then
 	echo "Sliding not supported in 'tmuxake' windows."
 	exit 0
 fi
@@ -59,7 +59,7 @@ else
 fi
 
 tmuxslider-next
-tmux refresh-client -S
+tmux refresh-client -S 
 }
 
 tmuxslider-close-all()
