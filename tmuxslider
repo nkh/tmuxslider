@@ -374,7 +374,7 @@ run_as_command()
 [[ "close"  == "$1" ]] && tmuxslider-close
 [[ "close-all"  == "$1" ]] && tmuxslider-close-all
 
-[[ "break"  == "$1" ]] && tmuxslider-break $2
+[[ "break"  == "$1" ]] && tmuxslider-break
 #[[ "detach"  == "$1" ]] && tmuxslider-detach $2
 #[[ "attach"  == "$1" ]] && tmuxslider-attach $2
 
@@ -385,6 +385,6 @@ run_as_command()
 [[ '--help' == $1 ||  '-h' == $1 ]] && tmuxslider-help
 }
 
-if [[ ! -n $USE_TMUXAKE_LIB ]] ; then run_as_command $@ ; tmuxslider-cleanup ; fi
+if [[ ! -n $USE_TMUXSLIDER_LIB ]] ; then run_as_command $@ ; tmuxslider-cleanup ; fi
 
 
