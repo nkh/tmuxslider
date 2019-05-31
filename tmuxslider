@@ -58,9 +58,18 @@ else
 	tmux swap-window -s "$mirror:0" -t "$mirror:1"
 fi
 
+if (( $# != 0 )) ;  then
+	command=$(join_by ' ' "$@")
+
+	sleep .4
+	tmux send-keys -t "$mirror:0" "$command" enter
+fi
+	
 tmuxslider-next
 tmux refresh-client -S 
 }
+
+function join_by { local d=$1; shift; echo -n "$1"; shift; printf "%s" "${@/#/$d}"; }
 
 tmuxslider-close-all()
 {
@@ -367,7 +376,7 @@ EOH
 
 run_as_command()
 {
-[[ "create"  == "$1" ]] && tmuxslider-create
+[[ "create"  == "$1" ]] && tmuxslider-create "${@:2:10}"
 [[ "next"  == "$1" ]] && tmuxslider-next
 [[ "previous"  == "$1" ]] && tmuxslider-previous
 
